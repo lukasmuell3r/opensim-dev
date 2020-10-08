@@ -1,0 +1,4 @@
+[submodule "opensimQt"]
+	path = opensimQt
+	url = https://github.com/lukasmuell3r/opensimQt
+	branch = BUILD
