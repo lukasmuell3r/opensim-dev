@@ -2,3 +2,7 @@
 	path = opensimQt
 	url = https://github.com/lukasmuell3r/opensimQt
 	branch = BUILD
+[submodule "opensim-core"]
+	path = opensim-core
+	url = https://github.com/lukasmuell3r/opensim-core
+	branch = BUILD
