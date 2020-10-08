@@ -1,0 +1,1 @@
+PowerShell.exe -ExecutionPolicy Bypass -File %~dp0install_programs.ps1
