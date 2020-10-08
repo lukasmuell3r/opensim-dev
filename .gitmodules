@@ -6,3 +6,7 @@
 	path = opensim-core
 	url = https://github.com/lukasmuell3r/opensim-core
 	branch = BUILD
+[submodule "opensim-gui"]
+	path = opensim-gui
+	url = https://github.com/lukasmuell3r/opensim-gui.git
+	branch = BUILD
