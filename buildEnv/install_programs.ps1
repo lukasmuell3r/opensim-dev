@@ -166,7 +166,7 @@ function modifyOpensimPath([string] $path) {
 }
 
 function refreshEnv() {
-	write-host "****************** Refreshing all script environment! *******************"
+	write-host "**************** Refreshing all script environment vars! *****************"
 	$env:OPENSIM = [System.Environment]::GetEnvironmentVariable("OPENSIM","Machine")
 	$env:PYTHON_PATH = [System.Environment]::GetEnvironmentVariable("PYTHON_PATH","Machine")
 	$env:PYTHON_LIB = [System.Environment]::GetEnvironmentVariable("PYTHON_LIB","Machine")
@@ -460,9 +460,9 @@ function expandToPath([string] $file, [string] $path) {
 	$find = ".zip"
 	$replace = ""
 	$name = $file.Replace($find, $replace)
-	write-host "Expanding " $file " to " $path $name "!" -ForegroundColor Yellow
+	write-host "Expanding " $file " to " $path$name "!" -ForegroundColor Yellow
 	$dest = $path + $name
-#	write-host "Dest: " $dest
+	write-host "Dest: " $dest
 	if (!(Test-Path $dest)) {
 		if (Test-Path "C:\opensim\installers\$filename") {
 			write-host "Extracting ..." -ForegroundColor Yellow
@@ -517,6 +517,144 @@ function installDoxygen([string] $filename) {
 		write-host $filename " is already installed on your system" -ForegroundColor Green
 	}
 }
+
+function confDeps([string] $source, [string] $dest) {
+	write-host $source
+	write-host $dest
+	if (!(Test-Path "$dest\ALL_BUILD.vcxproj")) {
+		write-host "Starting to build opensim-deps.." -ForegroundColor Yellow
+		$instprefix = "-DCMAKE_INSTALL_PREFIX=C:/opensim/$global:initials/install-opensim-deps"
+		write-host $instprefix
+		$configtypes = "-DCMAKE_CONFIGURATION_TYPES=Release"
+		write-host $configtypes
+		$args = '-G "Visual Studio 15 2017 Win64" -S ' + $source + ' -B ' + $dest + ' ' + $configtypes + ' ' + $instprefix
+		write-host $args
+		Start-Process cmake -ArgumentList $args -NoNewWindow
+		if (Test-Path "$dest\ALL_BUILD.vcxproj") {
+			write-host "Successfully build opensim-deps" -ForegroundColor Green
+		}
+	}
+	else {
+		write-host "Opensim-Deps are already builded!" -ForegroundColor Green
+	}
+}
+
+function build([string] $projroot, [string] $mode) {
+	if ($mode -Match "core-doxygen") {
+		$args = $projroot + "\OpenSim.sln /build Release /Project doxygen"
+		Start-Process -Wait devenv -ArgumentList $args -NoNewWindow
+		return
+	}
+	if ($mode -Match "simbody-doxygen") {
+		$args = $projroot + "\Simbody.sln /build Release /Project doxygen"
+		Start-Process -Wait devenv -ArgumentList $args -NoNewWindow
+		return
+	}
+	if ($mode -Match "install-core") {
+		$args = $projroot + "\OpenSim.sln /build Release /Project INSTALL"
+		Start-Process -Wait devenv -ArgumentList $args -NoNewWindow
+		return
+	}
+	if ($mode -Match "normal-core") {
+		$args = $projroot + "\OpenSim.sln /build Release /Project ALL_BUILD"
+		Start-Process -Wait devenv -ArgumentList $args -NoNewWindow
+		return
+	}
+	if ($mode -Match "normal-deps") {
+		$args = $projroot + "\OpenSimDependencies.sln /build Release /Project ALL_BUILD"
+		Start-Process -Wait devenv -ArgumentList $args -NoNewWindow
+		return
+	}
+	if ($mode -Match "normal-simbody") {
+		$args = $projroot + "\Simbody.sln /build Release /Project ALL_BUILD"
+		Start-Process -Wait devenv -ArgumentList $args -NoNewWindow
+		echo "" > "$dest\builded.final"
+		return
+	}
+	if ($mode -Match "install-vtk") {
+		$args = $projroot + "\VTK.sln /build Release /Project INSTALL"
+		Start-Process -Wait devenv -ArgumentList $args -NoNewWindow
+		echo "" > "$dest\builded.final"
+		return
+	}
+	if ($mode -Match "normal-vtk") {
+		$args = $projroot + "\VTK.sln /build Release /Project ALL_BUILD"
+		Start-Process -Wait devenv -ArgumentList $args -NoNewWindow
+		echo "" > "$dest\builded.final"
+		return
+	}
+}
+
+function confCore([string] $source, [string] $dest) {
+	write-host $source
+	write-host $dest
+	if (!(Test-Path "$dest\ALL_BUILD.vcxproj")) {
+		write-host "Starting to build opensim-core.." -ForegroundColor Yellow
+		$instprefix = "-DCMAKE_INSTALL_PREFIX=C:/opensim/$global:initials/install-opensim-core"
+		write-host $instprefix
+		$configtypes = "-DCMAKE_CONFIGURATION_TYPES=Release"
+		write-host $configtypes
+		$depdir = "-DOPENSIM_DEPENDENCIES_DIR=C:/opensim/" + $global:initials + "/install-opensim-deps"
+		$pythonconf = "-DOPENSIM_PYTHON_VERSION='3'"
+		$pythonwrapping = "-DBUILD_PYTHON_WRAPPING='True'"
+		$args = '-G "Visual Studio 15 2017 Win64" -S ' + $source + ' -B ' + $dest + ' ' + $configtypes + ' ' + $instprefix + ' ' + $depdir + ' ' + $pythonconf + ' ' + $pythonwrapping
+		write-host $args
+		Start-Process cmake -ArgumentList $args -NoNewWindow
+		if (Test-Path "$dest\ALL_BUILD.vcxproj") {
+			write-host "Successfully build opensim-core" -ForegroundColor Green
+		}
+	}
+	else {
+		write-host "Opensim-Core are already builded!" -ForegroundColor Green
+	}
+}
+
+function confVTK([string] $source, [string] $dest) {
+	write-host $source
+	write-host $dest
+	if (!(Test-Path "$dest\ALL_BUILD.vcxproj")) {
+		write-host "Starting to configure VTK.." -ForegroundColor Yellow
+		$configtypes = "-DCMAKE_CONFIGURATION_TYPES=Release"
+		$vtkpy = "-DVTK_PYTHON_VERSION='3'"
+		#$vtkgrpenqt = "-DVTK_GROUP_ENABLE_Qt=YES"
+		$vtkmodenvtkgui = "-DVTK_MODULE_ENABLE_VTK_GUISupportQt=YES"
+		$vtkmodenvtkguisql = "-DVTK_MODULE_ENABLE_VTK_GUISupportQtSQL=DEFAULT"
+		$vtkmodenvtkren = "-DVTK_MODULE_ENABLE_VTK_RenderingQt=YES"
+		$vtkmodenvtkview = "-DVTK_MODULE_ENABLE_VTK_ViewsQt=YES"
+		$args = '-G "Visual Studio 15 2017 Win64" -S ' + $source + ' -B ' + $dest + ' ' + $configtypes +' ' + $vtkpy + ' '  + $vtkmodenvtkgui + ' ' + $vtkmodenvtkguisql + ' ' + $vtkmodenvtkren + ' ' + $vtkmodenvtkview
+		write-host $args
+		Start-Process cmake -ArgumentList $args -NoNewWindow
+		if (Test-Path "$dest\ALL_BUILD.vcxproj") {
+			write-host "Successfully configured VTK" -ForegroundColor Green
+		}
+	}
+	else {
+		write-host "VTK already configured!" -ForegroundColor Green
+	}
+}
+
+function confSimbody([string] $source, [string] $dest) {
+	write-host $source
+	write-host $dest
+	if (!(Test-Path "$dest\builded.test")) {
+		write-host "Starting to build simbody.." -ForegroundColor Yellow
+		$instprefix = "-DCMAKE_INSTALL_PREFIX=C:/opensim/$global:initials/install-opensim-deps/simbody"
+		$configtypes = "-DCMAKE_CONFIGURATION_TYPES=Release"
+		$buildexample = "-DBUILD_EXAMPLES='True'"
+		write-host $buildexample
+		$instdocs = "-DINSTALL_DOCS='True'"
+		write-host $instdocs
+		$args = '-G "Visual Studio 15 2017 Win64" -S ' + $source + ' -B ' + $dest + ' ' + $configtypes + ' ' + $instprefix + ' ' + $buildexample + ' ' + $instdocs
+		write-host $args
+		Start-Process cmake -ArgumentList $args -NoNewWindow
+		echo "" > "$dest\builded.test"
+		if (Test-Path "$dest\builded.test") {
+			write-host "Successfully build simbody" -ForegroundColor Green
+		}
+		
+	}
+}
+
 # here is the normal program start. functions have to be written above
 
 # start - privlege verfication
@@ -549,7 +687,7 @@ curlSoftware "https://github.com/Kitware/CMake/releases/download/v3.18.4/cmake-3
 curlSoftware "https://download.visualstudio.microsoft.com/download/pr/5f6dfbf7-a8f7-4f36-9b9e-928867c28c08/da9f4f32990642c17a4188493949adcfd785c4058d7440b9cfe3b291bbb17424/vs_Community.exe" "vs_Community.exe" "Visual Studio 2017 CE"
 curlSoftware "http://doxygen.nl/files/doxygen-1.8.20-setup.exe" "doxygen-1.8.20-setup.exe" "Doxygen"
 curlSoftware "https://de.osdn.net/frs/g_redir.php?m=jaist&f=swig%2Fswigwin%2Fswigwin-3.0.12%2Fswigwin-3.0.12.zip" "swigwin-3.0.12.zip"
-curlSoftware "https://github.com/Kitware/VTK/archive/v9.0.1.zip" "VTK9.0.1.zip" "VTK 9.0.1"
+curlSoftware "https://github.com/Kitware/VTK/archive/v9.0.1.zip" "VTK-9.0.1.zip" "VTK 9.0.1"
 # end
 
 # start - install git
@@ -618,14 +756,69 @@ createAdditionalPaths
 # end
 
 # start - build opensim-deps
-
-#modifyOpensimPath "C:\opensim\$global:initials\install-opensim-deps\simbody\bin"
-#modifyOpensimPath "C:\opensim\$global:initials\install-opensim-deps\simbody\lib"
-#modifyOpensimPath "C:\opensim\$global:initials\install-opensim-deps"
+Read-Host "Press Enter to configure opensim-deps"
+confDeps "C:\opensim\$global:initials\opensim-core\dependencies" "C:\opensim\$global:initials\build-opensim-deps"
+# access to devenv command line tool
+modifyOpensimPath "C:\Program Files (x86)\Microsoft Visual Studio\2017\Community\Common7\IDE"
+Read-Host "Press Enter to build opensim-deps"
+if ((Test-Path "C:\opensim\LM\install-opensim-deps\BTK\bin") -And (Test-Path "C:\opensim\LM\install-opensim-deps\docopt\include") -And (Test-Path "C:\opensim\LM\install-opensim-deps\simbody\bin")) {
+	write-host "Opensim-Deps are already builded!" -ForegroundColor Green
+} else {
+	build "C:\opensim\$global:initials\build-opensim-deps" "normal-deps"
+}
 
 # end
 
+# start - build opensim-core
+Read-Host "Press Enter to configure opensim-core"
+if (Test-Path "C:\opensim\$global:initials\install-opensim-core\bin") {
+	write-host "Opensim-Core ist already builded!" -ForegroundColor Green
+}
+else {
+	confCore "C:\opensim\$global:initials\opensim-core" "C:\opensim\$global:initials\build-opensim-core"
+	Read-Host "Press Enter to build opensim-core"
+	build "C:\opensim\$global:initials\build-opensim-core" "normal-core"
+	Read-Host "Press Enter to build doxygen"
+	build "C:\opensim\$global:initials\build-opensim-core" "core-doxygen"
+	Read-Host "Press Enter to install opensim-core"
+	build "C:\opensim\$global:initials\build-opensim-core" "install-core"
+}
+# end
 
+# start - building Simbody
+Read-Host "Press Enter to configure Simbody"
+<#modifyOpensimPath "C:\opensim\$global:initials\install-opensim-core"
+modifyOpensimPath "C:\opensim\$global:initials\install-opensim-core\bin"
+modifyOpensimPath "C:\opensim\$global:initials\install-opensim-core\sdk\lib"#>
+confSimbody "C:\opensim\$global:initials\opensim-core\dependencies\simbody" "C:\opensim\$global:initials\build-opensim-deps\simbody\build"
+
+if (Test-Path "C:\opensim\LM\build-opensim-deps\simbody\build\builded.final") {
+	write-host "Simbody is already builded!" -ForegroundColor Green
+} else {
+	Read-Host "Press enter to build Simbody"
+	build "C:\opensim\LM\build-opensim-deps\simbody\build" "normal-simbody"
+	Read-Host "Press enter to build Simbody-doxygen"
+	build "C:\opensim\LM\build-opensim-deps\simbody\build" "simbody-doxygen"
+}
+
+# end
+
+# start - building vtk
+Read-Host "Press enter to extract VTK"
+expandToPath "VTK-9.0.1.zip" "C:\opensim\installers\"
+Read-Host "Press Enter to configure VTK"
+confVTK "C:\opensim\installers\VTK-9.0.1" "C:\opensim\installers\VTK-9.0.1-build"
+if (Test-Path "C:\Program Files\VTK") {
+	write-host "VTK is already builed" -ForegroundColor Green
+} else {
+	Read-Host "Press Enter to build VTK"
+	build "C:\opensim\installers\VTK-9.0.1-build" "normal-vtk"
+	Read-Host "Press Enter to install VTK" 
+	build "C:\opensim\installers\VTK-9.0.1-build" "install-vtk"
+}
+
+modifyOpensimPath "C:\Program Files\VTK"
+# end
 
 
 #################### Additional information #################
