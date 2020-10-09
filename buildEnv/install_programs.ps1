@@ -7,6 +7,7 @@ write-host "Warning: After executing the script it looks like the environment va
 
 $global:setupssh = $null
 $global:initials = $null
+$global:pyvers = $null
 
 function runAsAdmin() {
 	$principal = new-object System.Security.Principal.WindowsPrincipal([System.Security.Principal.WindowsIdentity]::GetCurrent())
@@ -121,12 +122,21 @@ function createOpensimPath() {
 }
 
 function createPythonPath() {
-	write-host "Creating PYTHON_PATH, PYTHON_LIB, PYTHONHOME system variables" -ForegroundColor Green
+	write-host "Creating PYTHON_PATH, PYTHON_LIB, PYTHONHOME system variables" -ForegroundColor Yellow
 	[Environment]::SetEnvironmentVariable("PYTHON_PATH", "C:\Python37", "Machine")
 	[Environment]::SetEnvironmentVariable("PYTHON_LIB", "C:\Python37\libs", "Machine")
 	[Environment]::SetEnvironmentVariable("PYTHONHOME", "C:\Python37", "Machine")
 	refreshEnv
 	write-host "Successfully created PYTHON_PATH, PYTHON_LIB, PYTHONHOME system variable" -ForegroundColor Green
+}
+
+function createAdditionalPaths() {
+	write-host "Creating SIMBODY_HOME, DOCOPT_DIR, DOXYGEN_EXECUTABLE system variables" -ForegroundColor Green
+	[Environment]::SetEnvironmentVariable("SIMBODY_HOME", "C:\opensim\$global:initials\install-opensim-deps\simbody", "Machine")
+	[Environment]::SetEnvironmentVariable("DOCOPT_DIR", "C:\opensim\$global:initials\install-opensim-deps\docopt", "Machine")
+	[Environment]::SetEnvironmentVariable("DOXYGEN_EXECUTABLE", "C:\Program Files\doxygen\bin", "Machine")
+	refreshEnv
+	write-host "Successfully created SIMBODY_HOME, DOCOPT_DIR, DOXYGEN_EXECUTABLE system variable" -ForegroundColor Green
 }
 
 function modifyOpensimPath([string] $path) {
@@ -146,6 +156,13 @@ function modifyOpensimPath([string] $path) {
 		[Environment]::SetEnvironmentVariable("OPENSIM", $env:OPENSIM, "Machine")
 		refreshEnv
 	}
+	# clean single C from cmake install
+	if ($env:Path -match "C;") {
+	Write-Host "Cleaning the C; entry in the Path variable" -ForegroundColor Green
+		$env:Path = $env:Path -replace "C;", ""
+		[Environment]::SetEnvironmentVariable("PATH", $env:Path, "Machine")
+		refreshEnv
+	}
 }
 
 function refreshEnv() {
@@ -154,6 +171,9 @@ function refreshEnv() {
 	$env:PYTHON_PATH = [System.Environment]::GetEnvironmentVariable("PYTHON_PATH","Machine")
 	$env:PYTHON_LIB = [System.Environment]::GetEnvironmentVariable("PYTHON_LIB","Machine")
 	$env:PYTHONHOME = [System.Environment]::GetEnvironmentVariable("PYTHONHOME","Machine")
+	$env:SIMBODY_HOME = [System.Environment]::GetEnvironmentVariable("SIMBODY_HOME","Machine")
+	$env:DOCOPT_DIR = [System.Environment]::GetEnvironmentVariable("DOCOPT_DIR","Machine")
+	$env:DOXYGEN_EXECUTABLE = [System.Environment]::GetEnvironmentVariable("DOXYGEN_EXECUTABLE","Machine")
 	# Path has to be refreshed in the last step!
 	$env:Path = [System.Environment]::GetEnvironmentVariable("Path","Machine")
 	write-host "Printing modified path..." -ForegroundColor Yellow
@@ -168,6 +188,14 @@ function refreshEnv() {
 		write-host $env:PYTHON_LIB -ForegroundColor DarkCyan
 		write-host "PYTHONHOME:" -ForegroundColor Yellow
 		write-host $env:PYTHONHOME -ForegroundColor DarkCyan
+	}
+	if (($env:SIMBODY_HOME -match "simbody") -And ($env:DOCOPT_DIR -match "docopt") -And ($env:DOXYGEN_EXECUTABLE -match "doxygen")) {
+		write-host "SIMBODY_HOME:" -ForegroundColor Yellow
+		write-host $env:SIMBODY_HOME -ForegroundColor DarkCyan
+		write-host "DOCOPT_DIR:" -ForegroundColor Yellow
+		write-host $env:DOCOPT_DIR -ForegroundColor DarkCyan
+		write-host "DOXYGEN_EXECUTABLE:" -ForegroundColor Yellow
+		write-host $env:DOXYGEN_EXECUTABLE -ForegroundColor DarkCyan
 	}
 }
 
@@ -286,7 +314,7 @@ function installVS([string] $filename) {
 			$process = "C:\opensim\installers\" + $filename
 			$layoutpath = "C:\opensim\installers\vslayout"
 			write-host "Starting the installation of Visual Studio" -ForegroundColor Yellow
-			Start-Process -Wait "$process" -ArgumentList "--layout $layoutpath --add Microsoft.VisualStudio.Workload.NativeDesktop --includeRecommended --lang en-US"
+			Start-Process -Wait $process -ArgumentList "--layout $layoutpath --add Microsoft.VisualStudio.Workload.NativeDesktop --includeRecommended --lang en-US"
 			if (Test-Path "C:\opensim\installers\vslayout\$filename") {
 				write-host "Verified existence of Layout from Visual Studio" -ForegroundColor Green
 				write-host "Starting installation" -ForegroundColor Yellow
@@ -364,26 +392,131 @@ function cloneAll() {
 }
 
 function getShortPytonVersionAndConfQt() {
-	$version = python --version
-	if (![string]::IsNullOrEmpty($version)) {
+	$global:pyvers = python --version
+	if (![string]::IsNullOrEmpty($global:pyvers)) {
 		$find1 = "Python "
 		$find2 = "."
 		$replace = ""
-		$version = $version.Replace($find1, $replace)
-		$version = $version.Replace($find2, $replace)
-		$version = $version.SubString(0,2)
-		write-host "Detected Python version " $version -ForegroundColor Green
+		$global:pyvers = $global:pyvers.Replace($find1, $replace)
+		$global:pyvers = $global:pyvers.Replace($find2, $replace)
+		$global:pyvers = $global:pyvers.SubString(0,2)
+		write-host "Detected Python version " $global:pyvers -ForegroundColor Green
 		write-host "Modyfying python.prf from pythonQt building directory.." -ForegroundColor yellow
 		$file = "C:\opensim\$global:initials\opensimQt\pythonQt\build\python.prf"
 		$findstr = "win32:PYTHON_VERSION=27"
-		$replacestr = "win32:PYTHON_VERSION=" + $version
-		(Get-Content $file).Replace($findstr, $replacestr)| Set-Content $file
+		if (![string]::IsNullOrEmpty($findstr)){
+			write-host "Replacing python version in python.prf" -ForegroundColor Yellow
+			$replacestr = "win32:PYTHON_VERSION=" + $global:pyvers
+			(Get-Content $file).Replace($findstr, $replacestr)| Set-Content $file
+			write-host "Successfully replaced python version in python.prf" -ForegroundColor Green
+		} else {
+			write-host "Python version in python.prf is already up to date" -ForegroundColor Green
+		}
 	}
 	
 	
 	
 }
 
+function configureQtCMakeList() {
+	$file = "C:\opensim\$global:initials\opensimQt\Gui\CMakeLists.txt"
+	$pyqtsrcpath = '"C:/opensim/' + $global:initials + '/opensimQt/pythonqt"'
+	write-host "Pyqtsrcpath" $pyqtsrcpath
+	$pyqtpath = '"C:/opensim/' + $global:initials + '/opensimQt/build-PythonQt-Desktop_Qt_5_12_7_MSVC2017_64bit-Release"'
+	$findstr = 'set(PYTHONQT_SRC_PATH "/home/ibr/myGitLab/opensim-dev/IA/pythonQt")'
+	$opensimdir = 'C:/opensim/' + $global:initials + '/install-opensim-core/lib/cmake/OpenSim'
+	if (![string]::IsNullOrEmpty($findstr)) {
+		$replacestr = 'set(PYTHONQT_SRC_PATH ' + $pyqtsrcpath + ')'
+		(Get-Content $file).Replace($findstr, $replacestr)| Set-Content $file
+	} else {
+		write-host "Python QT SRC Path in CmakeLists is already up to date" -ForegroundColor Green
+	}
+	$findstr = 'set(PYTHONQT_PATH "/home/ibr/myGitLab/opensim-dev/IA/pythonQt-build")'
+	if (![string]::IsNullOrEmpty($findstr)) {
+		$replacestr = 'set(PYTHONQT_PATH ' + $pyqtpath + ')'
+		(Get-Content $file).Replace($findstr, $replacestr)| Set-Content $file
+	} else {
+		write-host "Python QT Path in CmakeLists is already up to date" -ForegroundColor Green
+	}
+	
+	$findstr = 'set (PyVer 3.6)'
+	if (![string]::IsNullOrEmpty($findstr)) {
+		write-host $global:pyvers
+		$replacestr = 'set (PyVer ' + $global:pyvers + ')'
+		(Get-Content $file).Replace($findstr, $replacestr)| Set-Content $file
+	} else {
+		write-host "Python version in CmakeLists is already up to date" -ForegroundColor Green
+	}
+	$findstr = 'set(OpenSim_DIR "/home/ibr/myGitLab/opensim-dev/IA/install-opensim-core/lib/cmake/OpenSim")'
+	if (![string]::IsNullOrEmpty($findstr)) {	
+		$replacestr = 'set(OpenSim_DIR ' + $opensimdir + ')'
+		(Get-Content $file).Replace($findstr, $replacestr)| Set-Content $file
+	} else {
+		write-host "Python version in CmakeLists is already up to date" -ForegroundColor Green
+	}
+}
+
+function expandToPath([string] $file, [string] $path) {
+	$find = ".zip"
+	$replace = ""
+	$name = $file.Replace($find, $replace)
+	write-host "Expanding " $file " to " $path $name "!" -ForegroundColor Yellow
+	$dest = $path + $name
+#	write-host "Dest: " $dest
+	if (!(Test-Path $dest)) {
+		if (Test-Path "C:\opensim\installers\$filename") {
+			write-host "Extracting ..." -ForegroundColor Yellow
+			Expand-Archive "C:\opensim\installers\$file" $path
+			
+			
+			if (Test-Path $dest) {
+				write-host "Successfully extracted " $filename -ForegroundColor Green
+			} else {
+				write-host "Somenthing went wrong when extracting.." -ForegroundColor Red
+			}
+		}
+	} else {
+		write-host $file " is already extracted!" -ForegroundColor Green
+	}
+}
+
+function installMSI([string] $filename, [string] $destpath) {
+	if (!(Test-Path $destpath)) {
+		write-host "Intalling " $filename -ForegroundColor Yellow
+		if (Test-Path "C:\opensim\installers\$filename") {
+			write-host "Veried existence of " $filename -ForegroundColor Yellow
+			write-host "Starting the installation" - ForegroundColor Yellow
+			$process = "C:\opensim\installers\$filename"
+			Start-Process -Wait $process -ArgumentList "/qn /norestart"
+			if (Test-Path $destpath) {
+				write-host "Successfully installed " $filename -ForegroundColor Green
+			} else {
+				write-host "Somenthing went wrong installing " $filename -ForegroundColor Red
+			}
+		}
+	} else {
+		write-host $filename " is already installed on your system" -ForegroundColor Green
+	}
+}
+
+function installDoxygen([string] $filename) {
+	if (!(Test-Path "C:\Program Files\doxygen\bin")) {
+		write-host "Installing " $filename -ForegroundColor Yellow
+		if (Test-Path "C:\opensim\installers\$filename") {
+			write-host "Verified existence of " $filename -ForegroundColor Yellow
+			write-host "Starting installation.." -ForegroundColor Yellow
+			$process = "C:\opensim\installers\$filename"
+			Start-Process -Wait $process -ArgumentList "/VERYSILENT"
+			if (Test-Path "C:\Program Files\doxygen\bin") {
+				write-host "Successfully installed " $filename -ForegroundColor Green
+			} else {
+				write-host "Something went wrong when installing " $filename -ForegroundColor Red
+			}
+		}
+	} else {
+		write-host $filename " is already installed on your system" -ForegroundColor Green
+	}
+}
 # here is the normal program start. functions have to be written above
 
 # start - privlege verfication
@@ -427,7 +560,6 @@ installGit "Git-2.28.0-64-bit.exe"
 cloneAll
 # end
 
-#TODO.txt lesen!! Hier geht es weiter mit dem Testen.
 # start - install vs
 installVS "vs_Community.exe"
 # end
@@ -441,27 +573,58 @@ modifyOpensimPath "C:\Qt\Qt5.12.9\5.12.9\msvc2017_64\lib"
 
 # end
 
-# start install python
+# start - install python (special paths will be created in installPython function)
 installPython "python-3.7.9-amd64.exe"
 modifyOpensimPath "C:\Python37"
-# add the python paths to the scripts environment
-# $vers = python --version
-# if ($vers -match "3.7.9") {
-#	write-host "Successfully installed python" -ForegroundColor Green
-#}
 # end
 
 
 # start - configure qt prf file
 getShortPytonVersionAndConfQt
-# type "C:\opensim\$global:initials\opensimQt\pythonQt\build\python.prf"
+type "C:\opensim\$global:initials\opensimQt\pythonQt\build\python.prf"
 # end
+
+# start - configure cmakelists of opensimqt-Gui\CMakeLists
+configureQtCMakeList
+type "C:\opensim\$global:initials\opensimQt\Gui\CMakeLists.txt"
 
 # start - work here 
 
+# start - install cmake
+installMSI "cmake-3.18.4-win64-x64.msi" "C:\Program Files\CMake"
+modifyOpensimPath "C:\Program Files\CMake\bin"
+#test
+cmake
+# end
 
+# start - install swigwin
+expandToPath "swigwin-3.0.12.zip" "C:\Program Files\"
+modifyOpensimPath "C:\Program Files\swigwin-3.0.12"
+# Test
+swig
+# end
+
+# start - doxygen install
+installDoxygen "doxygen-1.8.20-setup.exe"
+modifyOpensimPath "C:\Program Files\doxygen\bin"
+# test
+doxygen
+# end
+
+# start - add additional paths
+createAdditionalPaths
+# end
+
+# start - build opensim-deps
+
+#modifyOpensimPath "C:\opensim\$global:initials\install-opensim-deps\simbody\bin"
+#modifyOpensimPath "C:\opensim\$global:initials\install-opensim-deps\simbody\lib"
+#modifyOpensimPath "C:\opensim\$global:initials\install-opensim-deps"
 
 # end
+
+
+
 
 #################### Additional information #################
 # start - To add additionals paths use the following two lines
@@ -473,7 +636,6 @@ modifyOpensimPath(path)
 # personal testscripts in the new paths here (will not run in your environment)
 <# testpath
 #>
-
 
 # start - End of the script
 # pause the script an wait for any key to finish
