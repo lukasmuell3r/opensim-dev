@@ -596,7 +596,7 @@ configureQtCMakeList
 installMSI "cmake-3.18.4-win64-x64.msi" "C:\Program Files\CMake"
 modifyOpensimPath "C:\Program Files\CMake\bin"
 #test
-cmake
+#cmake
 # end
 
 # start - install swigwin
