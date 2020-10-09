@@ -581,12 +581,14 @@ modifyOpensimPath "C:\Python37"
 
 # start - configure qt prf file
 getShortPytonVersionAndConfQt
-type "C:\opensim\$global:initials\opensimQt\pythonQt\build\python.prf"
+# test
+#type "C:\opensim\$global:initials\opensimQt\pythonQt\build\python.prf"
 # end
 
 # start - configure cmakelists of opensimqt-Gui\CMakeLists
 configureQtCMakeList
-type "C:\opensim\$global:initials\opensimQt\Gui\CMakeLists.txt"
+# test
+#type "C:\opensim\$global:initials\opensimQt\Gui\CMakeLists.txt"
 
 # start - work here 
 
@@ -601,14 +603,14 @@ cmake
 expandToPath "swigwin-3.0.12.zip" "C:\Program Files\"
 modifyOpensimPath "C:\Program Files\swigwin-3.0.12"
 # Test
-swig
+#swig
 # end
 
 # start - doxygen install
 installDoxygen "doxygen-1.8.20-setup.exe"
 modifyOpensimPath "C:\Program Files\doxygen\bin"
 # test
-doxygen
+#doxygen
 # end
 
 # start - add additional paths
