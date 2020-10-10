@@ -204,14 +204,9 @@ function opensimCorePaths() {
 	modifyOpensimPath("C:\opensim\" + $global:initials + "\install-opensim-deps\simbody\bin")
 	modifyOpensimPath("C:\opensim\" + $global:initials + "\install-opensim-deps\simbody\lib")
 	modifyOpensimPath("C:\opensim\" + $global:initials + "\install-opensim-deps")
-	modifyOpensimPath("C:\opensim\" + $global:initials)
 	modifyOpensimPath("C:\opensim\" + $global:initials + "\install-opensim-core")
 	modifyOpensimPath("C:\opensim\" + $global:initials + "\install-opensim-core\bin")
 	modifyOpensimPath("C:\opensim\" + $global:initials + "\install-opensim-core\sdk\lib")
-	<# activate this part if other install stuff is done
-	modifyOpensimPath("C:\opensim\" + $global:initials + "\opensimQt\build-PythonQt-Desktop_Qt_5_12_7_MSVC2017_64bit-Release\lib")
-	modifyOpensimPath("C:\Program Files(x86)\VTK\bin")
-	#>
 }
 
 function curlSoftware ([string] $url, [string] $filename, [string] $name) {
@@ -284,7 +279,7 @@ function installQt([string] $filename) {
 		write-host "-> Next -> Check 'I am an individual person not using Qt for any company'" -ForegroundColor DarkCyan
 		write-host "-> Check 'I have read and approve the obligations of using Open Source Qt'" -ForegroundColor DarkCyan
 		write-host "-> Next -> Next -> Default 'C:\Qt\Qt5.12.9 and check 'Associate common file types with Qt Creator''" -ForegroundColor DarkCyan
-		write-host "-> Next -> Expand 'Qt 5.12.9' and only select 'MSVC 2017 64-bit' -> Next " -ForegroundColor DarkCyan
+		write-host "-> Next -> Expand 'Qt 5.12.9' and select 'MSVC 2017 64-bit' and 'QtWebEngine' -> Next " -ForegroundColor DarkCyan
 		write-host "Check 'I have read and agree to the terms contained in the license agreements.' -> Next" -ForegroundColor DarkCyan
 		write-host "-> Default '5.12.9' -> Next -> Install -> Next -> Uncheck 'Launch Qt Creator' -> Finish" -ForegroundColor DarkCyan
 		write-host ""
@@ -407,7 +402,9 @@ function getShortPytonVersionAndConfQt() {
 		if (![string]::IsNullOrEmpty($findstr)){
 			write-host "Replacing python version in python.prf" -ForegroundColor Yellow
 			$replacestr = "win32:PYTHON_VERSION=" + $global:pyvers
-			(Get-Content $file).Replace($findstr, $replacestr)| Set-Content $file
+			$myfile = (Get-Content $file).Replace($findstr, $replacestr)
+			$Utf8NoBomEncoding = New-Object System.Text.UTF8Encoding $False
+			[System.IO.File]::WriteAllLines($file, $myfile, $Utf8NoBomEncoding)
 			write-host "Successfully replaced python version in python.prf" -ForegroundColor Green
 		} else {
 			write-host "Python version in python.prf is already up to date" -ForegroundColor Green
@@ -422,7 +419,7 @@ function configureQtCMakeList() {
 	$file = "C:\opensim\$global:initials\opensimQt\Gui\CMakeLists.txt"
 	$pyqtsrcpath = '"C:/opensim/' + $global:initials + '/opensimQt/pythonqt"'
 	write-host "Pyqtsrcpath" $pyqtsrcpath
-	$pyqtpath = '"C:/opensim/' + $global:initials + '/opensimQt/build-PythonQt-Desktop_Qt_5_12_7_MSVC2017_64bit-Release"'
+	$pyqtpath = '"C:/opensim/' + $global:initials + '/opensimQt/pythonqt"'
 	$findstr = 'set(PYTHONQT_SRC_PATH "/home/ibr/myGitLab/opensim-dev/IA/pythonQt")'
 	$opensimdir = 'C:/opensim/' + $global:initials + '/install-opensim-core/lib/cmake/OpenSim'
 	if (![string]::IsNullOrEmpty($findstr)) {
@@ -574,15 +571,20 @@ function build([string] $projroot, [string] $mode) {
 	if ($mode -Match "install-vtk") {
 		$args = $projroot + "\VTK.sln /build Release /Project INSTALL"
 		Start-Process -Wait devenv -ArgumentList $args -NoNewWindow
-		echo "" > "$dest\builded.final"
 		return
 	}
 	if ($mode -Match "normal-vtk") {
 		$args = $projroot + "\VTK.sln /build Release /Project ALL_BUILD"
 		Start-Process -Wait devenv -ArgumentList $args -NoNewWindow
-		echo "" > "$dest\builded.final"
 		return
 	}
+	if ($mode -Match "normal-opensimqt") {
+		$args = $projroot + "\opensimQt.sln /build Release /Project ALL_BUILD"
+		Start-Process -Wait devenv -ArgumentList $args -NoNewWindow
+		return
+	}
+	
+	
 }
 
 function confCore([string] $source, [string] $dest) {
@@ -655,6 +657,69 @@ function confSimbody([string] $source, [string] $dest) {
 	}
 }
 
+function buildPythonQt([string] $projroot) {
+	write-host "Building " $projroot -ForegroundColor Yellow
+	if (!(Test-Path "C:\opensim\$global:initials\opensimQt\pythonqt\Makefile")) {
+		write-host "Loading Build environment from MSVC" -ForegroundColor Yellow	
+		cmd.exe /c "call `"C:\Program Files (x86)\Microsoft Visual Studio\2017\Community\VC\Auxiliary\Build\vcvars64.bat`" && set > %temp%\vcvars.txt"
+		Get-Content "$env:temp\vcvars.txt" | Foreach-Object {
+			if ($_ -match "^(.*?)=(.*)$") {
+				Set-Content "env:\$($matches[1])" $matches[2]
+			}
+		}
+		pushd $projroot
+		qmake "PythonQt.pro"
+		nmake
+		popd
+		write-host "Finished Building with qmake..." -ForegroundColor Green
+		#nmake		
+	}
+	else {
+		Write-Host "pythonQt is already builded" -ForegroundColor Green
+	}
+}
+
+function confOpensimQt([string] $source, [string] $dest) {
+	if(!(Test-Path "C:\opensim\$global:initials\opensimQt\build")) {
+		write-host "Starting to configure opensimQt" -ForegroundColor Yellow
+		$args = '-G "Visual Studio 15 2017 Win64" -S ' + $source + ' -B ' + $dest
+		Start-Process cmake -ArgumentList $args -NoNewWindow
+		if (Test-Path "$dest\ALL_BUILD.vcxproj") {
+			write-host "Successfully configured opensimQt" -ForegroundColor Green
+		}
+	} else {
+		write-host "OpensimQt is already configures" -ForegroundColor Green
+	}
+}
+
+function pyInstallOpensim() {
+	if (!(Test-Path "C:\Python$global:pyvers\Lib\site-packages\opensim")) {
+		write-host "Installating opensim module for python.." -ForegroundColor Yellow
+		if (Test-Path "C:\opensim\$global:initials\install-opensim-core\sdk\Python") {
+			pushd "C:\opensim\$global:initials\install-opensim-core\sdk\Python"
+			Start-Process -Wait pip -ArgumentList "install ." -NoNewWindow
+			if (!(Test-Path "C:\Python$global:pyvers\Lib\site-packages\opensim")) {
+				write-host "Something went wrong installing opensim module.." -ForegroundColor Red
+			} else {
+				write-host "Succesfully installed opensim module!" -ForegroundColor Green
+			}
+		}
+	} 
+	else {
+		write-host "opensim python module already installed" -ForegroundColor Green
+	}
+}
+
+
+function copyVtkImages() {
+	write-host "Moving vtk_images folder to the right location"
+	if (!(Test-Path "C:\opensim\$global:initials\opensimQt\build\Release\vtk_images")) {
+		Copy-Item -Recurse -Force "C:\opensim\$global:initials\opensimQt\build\vtk_images" "C:\opensim\$global:initials\opensimQt\build\Release\vtk_images"
+		write-host "Succesfully moved the folder" -ForegroundColor Green
+	} else {
+		write-host "VTK-Images are already at the right location" -ForegroundColor Green
+	}
+}
 # here is the normal program start. functions have to be written above
 
 # start - privlege verfication
@@ -714,6 +779,7 @@ modifyOpensimPath "C:\Qt\Qt5.12.9\5.12.9\msvc2017_64\lib"
 # start - install python (special paths will be created in installPython function)
 installPython "python-3.7.9-amd64.exe"
 modifyOpensimPath "C:\Python37"
+modifyOpensimPath "C:\Python37\Scripts"
 # end
 
 
@@ -818,8 +884,31 @@ if (Test-Path "C:\Program Files\VTK") {
 }
 
 modifyOpensimPath "C:\Program Files\VTK"
+modifyOpensimPath "C:\Program Files\VTK\bin"
 # end
 
+# start - build pythonQt
+# check for building is in the method
+buildPythonQt "C:\opensim\$global:initials\opensimQt\pythonqt"
+modifyOpensimPath "C:\opensim\$global:initials\opensimQt\pythonqt"
+modifyOpensimPath "C:\opensim\$global:initials\opensimQt\pythonqt\lib"
+# end
+
+# start - build opensimQt
+Read-Host "Press enter to configure OpensimQt"
+confOpensimQt "C:\opensim\$global:initials\opensimQt\Gui" "C:\opensim\$global:initials\opensimQt\build"
+Read-Host "Press enter to build OpensimQt"
+if (Test-Path "C:\opensim\$global:initials\opensimQt\build\Release\opensimQt.exe") {
+	write-host "OpensimQt is already builded" -ForegroundColor Green
+} else {
+	build "C:\opensim\$global:initials\opensimQt\build" "normal-opensimqt"
+}
+copyVtkImages
+# end
+
+# start - install opensim for python
+pyInstallOpensim
+# end
 
 #################### Additional information #################
 # start - To add additionals paths use the following two lines
